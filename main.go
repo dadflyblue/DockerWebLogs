@@ -3,16 +3,17 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
-	"github.com/gin-gonic/gin"
 )
 
 var (
@@ -34,38 +35,48 @@ func init() {
 	if err == nil {
 		dockerClient = client
 	} else {
-		log.Default().Fatalf("init docker client error: %v", err)
+		log.Fatalf("init docker client error: %v", err)
 	}
 }
 
 func main() {
-	r := gin.Default()
-	r.GET("/logs", logs)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/logs", handleLogs)
 
-	log.Default().Fatal(http.ListenAndServe(PORT, r))
+	log.Printf("start to listen at: [%v]", PORT)
+	log.Fatal(http.ListenAndServe(PORT, mux))
 }
 
-type ContainerIdBasedReq struct {
-	ContainerId string `form:"cid" binding:"required"`
-}
+func handleLogs(w http.ResponseWriter, r *http.Request) {
+	var (
+		Cid    string
+		Follow bool   = true
+		Since  string = ""
+		Tail   string = "all"
+		Until  string = ""
+	)
 
-type ContainerLogsReq struct {
-	ContainerIdBasedReq
-	Follow bool   `form:"follow,default=true"`
-	Since  string `form:"since"`
-	Tail   string `form:"tail,default=all"`
-	Until  string `form:"until"`
-}
-
-func logs(c *gin.Context) {
-	var p ContainerLogsReq
-	if err := c.ShouldBindQuery(&p); err != nil {
-		c.Status(http.StatusBadRequest)
-	} else {
-		err := readLogs(c.Writer, p.ContainerId, p.Follow, p.Since, p.Tail, p.Until)
-		if err != nil {
-			c.Status(http.StatusInternalServerError)
-		}
+	if Cid = r.URL.Query().Get("cid"); Cid == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "error: %v.", "container id is not present")
+		return
+	}
+	if r.URL.Query().Has("follow") {
+		Follow, _ = strconv.ParseBool(r.URL.Query().Get("follow"))
+	}
+	if r.URL.Query().Has("since") {
+		Since = r.URL.Query().Get("since")
+	}
+	if r.URL.Query().Has("tail") {
+		Tail = r.URL.Query().Get("tail")
+	}
+	if r.URL.Query().Has("until") {
+		Until = r.URL.Query().Get("until")
+	}
+	err := readLogs(w, Cid, Follow, Since, Tail, Until)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "error: %v.", err)
 	}
 }
 
@@ -94,7 +105,7 @@ func readLogs(writer http.ResponseWriter, cid string, follow bool, since string,
 	}
 	defer responseBody.Close()
 
-	log.Default().Printf("start to read docker logs with opt: %v", options)
+	log.Printf("start docker container (id: %v) logs with opts: %v", cid, options)
 
 	// refer:
 	// - https://github.com/gin-gonic/examples/blob/master/send_chunked_data/send_chunked_data.go

@@ -40,3 +40,6 @@ replay_pid*
 
 # Local environment
 .env
+
+# Exe
+DockerWebLogs
