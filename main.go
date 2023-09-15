@@ -108,26 +108,26 @@ func readLogs(writer http.ResponseWriter, cid string, follow bool, since string,
 	resp, _ := dockerClient.ContainerInspect(cxt, cid)
 	if resp.Config.Tty {
 		// _, err = io.Copy(os.Stdout, responseBody)
-		_, err = io.Copy(newLineWriter(writer), responseBody)
+		_, err = io.Copy(NewFlushLineWriter(writer), responseBody)
 		return err
 	} else {
 		// _, err = stdcopy.StdCopy(os.Stdout, os.Stderr, responseBody)
-		_, err = stdcopy.StdCopy(newLineWriter(writer), newLineWriter(writer), responseBody)
+		_, err = stdcopy.StdCopy(NewFlushLineWriter(writer), NewFlushLineWriter(writer), responseBody)
 		return err
 	}
 }
 
-type LineWriter struct {
+type FlushLineWriter struct {
 	Out io.Writer
 }
 
-func newLineWriter(writer io.Writer) io.Writer {
-	return &LineWriter{
+func NewFlushLineWriter(writer io.Writer) io.Writer {
+	return &FlushLineWriter{
 		Out: writer,
 	}
 }
 
-func (w *LineWriter) Write(p []byte) (n int, err error) {
+func (w *FlushLineWriter) Write(p []byte) (n int, err error) {
 	total := 0
 	for len(p) > 0 {
 		i := bytes.IndexByte(p, '\n')
