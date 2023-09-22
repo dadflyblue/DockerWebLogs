@@ -57,8 +57,7 @@ func handleLogs(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if Cid = r.URL.Query().Get("cid"); Cid == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "error: %v.", "container id is not present")
+		http.Error(w, fmt.Sprintf("error: %v.", "container id is not present"), http.StatusBadRequest)
 		return
 	}
 	if r.URL.Query().Has("follow") {
@@ -75,8 +74,7 @@ func handleLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	err := readLogs(w, Cid, Follow, Since, Tail, Until)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "error: %v.", err)
+		http.Error(w, fmt.Sprintf("error: %v.", err), http.StatusInternalServerError)
 	}
 }
 
@@ -114,7 +112,6 @@ func readLogs(writer http.ResponseWriter, cid string, follow bool, since string,
 
 	writer.Header().Set("Transfer-Encoding", "chunked")
 	writer.Header().Set("Content-Type", "text/plain")
-	writer.WriteHeader(http.StatusOK)
 
 	resp, _ := dockerClient.ContainerInspect(cxt, cid)
 	if resp.Config.Tty {
